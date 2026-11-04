@@ -1,0 +1,10 @@
+numpy
+scipy
+matplotlib
+PySide6
+h5py
+nanosurf>=2      # optional: Nanosurf's own .nhf reader (the built-in reader is used without it)
+NSFopen>=2.4.0  # image processing, spectroscopy and color maps (NSFopen.process); also needs pandas
+python-pptx   # optional: PowerPoint reports
+# tests only
+pytest

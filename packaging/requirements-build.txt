@@ -1,0 +1,8 @@
+# What the stand-alone build needs (no optional packages): install into a fresh virtual environment, see build.bat
+numpy
+scipy
+matplotlib
+PySide6
+h5py
+NSFopen>=2.4.0
+pyinstaller>=6.10

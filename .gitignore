@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/
+
+# stand-alone build output (the program goes on GitHub Releases, not into the repository)
+packaging/build/
+packaging/dist/
+packaging/Output/
+packaging/version.tmp
+
+# local copies, backups, Office lock files
+_pre_nsfopen_backup/
+~$*
+
+# your own color maps (the folder ships with its README only)
+app_NSSA/colormaps/*
+!app_NSSA/colormaps/README.md
+
+# credentials: never commit these
+tokens.json
+*.token
+.env
+
+# the developer's notes and old tutorials (kept locally, not published)
+NOTES.md
+*.pptx
+*.pdf

@@ -1,0 +1,5 @@
+.venv-build/
+build/
+dist/
+Output/
+version.tmp
