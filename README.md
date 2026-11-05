@@ -17,7 +17,8 @@ the same numbers.
 
 - **Images:** leveling (flatten, polynomial, facets, three points), masks, filters, glitch and scar repair, rescaling,
   statistics after ISO 25178, line cuts with step heights, critical dimension and ISO 21920 roughness, PSD fits, grain
-  analysis, lattice measurement, stitching, channel arithmetic and a 3D view.
+  analysis, lattice measurement, curvature (radii, bow), terrace analysis with step heights, stitching, channel
+  arithmetic and a 3D view.
 - **Spectroscopy:** force curves and force maps fitted with Hertz, Sneddon, DMT, JKR or Oliver-Pharr for five tip
   shapes, maps of modulus and adhesion (also on the topography in 3D), masks, different models on different regions,
   a quality filter, histograms with fits, and I-V curves.
@@ -32,7 +33,7 @@ is `app_NSSA/MANUAL.md`, also on the Help page of the program (F1).
 
 ## Running from the source code
 
-Needs Python 3.10 or newer and NSFopen 2.4.0 or newer, which `requirements.txt` installs:
+Needs Python 3.10 or newer and NSFopen 2.5.0 or newer, which `requirements.txt` installs:
 
 ```
 pip install -r requirements.txt
@@ -99,7 +100,7 @@ on the first start until the .exe and the installer are signed with a code signi
 | `widgets.py`, `plot_style.py` | input widgets, the dark and light look of the graphs |
 
 The computations (operations, measurements, fits, grains, ISO profile analysis, channel arithmetic) are NSFopen's
-(`NSFopen.process`, NSFopen >= 2.4.0), so scripts and the app give the same numbers; the app's files of the same names
+(`NSFopen.process`, NSFopen >= 2.5.0), so scripts and the app give the same numbers; the app's files of the same names
 re-export them and add only display helpers. `pipeline.py` and `imgdata.py` contain no GUI code either. A new operation
 is one function with the `@_op("group.name", "Label", **defaults)` decorator in NSFopen's `process/ops.py` plus a button
 in `panels.py`; macros, undo and batch work automatically. `tests/gui_smoke.py` and `tests/gui_panels.py` write screenshots of the window for a visual check.
