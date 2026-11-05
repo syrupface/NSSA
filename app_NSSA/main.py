@@ -203,6 +203,8 @@ def _spectroscopy_batch(argv: list) -> int:
 
 
 def main():
+    import multiprocessing
+    multiprocessing.freeze_support()     # the stand-alone build: a process started to fit force curves runs here
     if "--spectroscopy" in sys.argv:
         sys.exit(_spectroscopy_batch([a for a in sys.argv[1:] if a != "--spectroscopy"]))
     if "--selftest" in sys.argv:
