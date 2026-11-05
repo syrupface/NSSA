@@ -22,6 +22,49 @@ TOOLS = [("pick", "Pick curve", "Click a pixel to show its curve"),
          ("add", "Mask: add", "Drag a rectangle or click pixels to add curves to the mask"),
          ("erase", "Mask: erase", "Drag a rectangle or click pixels to take curves out of the mask")]
 MASK_RGBA = (1.0, 0.25, 0.25, 0.45)
+LEVELS = [("none", "As measured"), ("offset", "Line offset"), ("line", "Line fit"), ("plane", "Plane"),
+          ("poly2", "Polynomial 2"), ("poly3", "Polynomial 3")]
+LEVEL_HELP = ("Leveling for the display only: the results, statistics, histogram, mask and exports keep the measured "
+              "values.\nLine offset / Line fit: the median / a straight line of every line (row) subtracted; Plane, "
+              "Polynomial 2 / 3: a surface fitted to the whole map subtracted. For the height (contact) of a tilted or "
+              "bowed sample, and for images of the file.")
+
+
+def level(values: np.ndarray, kind: str) -> np.ndarray:
+    """ A copy of a map (or image) with a background subtracted, for the display: 'offset' (median of every row),
+        'line' (straight line of every row), 'plane', 'poly2', 'poly3' (a polynomial surface fitted to all valid
+        pixels); 'none': unchanged. Rows are the scan lines; NaN (no value) stays NaN. """
+    values = np.asarray(values, dtype=float)
+    if kind == "none" or values.ndim != 2:
+        return values
+    out = values.copy()
+    good = np.isfinite(values)
+    ny, nx = values.shape
+    if kind in ("offset", "line"):
+        x = np.arange(nx, dtype=float)
+        for r in range(ny):
+            row = good[r]
+            if kind == "offset" or row.sum() < 2:
+                if row.any():
+                    out[r] -= np.median(values[r, row])
+                continue
+            slope, offset = np.polyfit(x[row], values[r, row], 1)
+            out[r] -= slope * x + offset
+        return out
+    order = {"plane": 1, "poly2": 2, "poly3": 3}[kind]
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    u = (xx - (nx - 1) / 2.0) / max(nx - 1, 1)                 # -0.5 .. 0.5: a well conditioned fit
+    v = (yy - (ny - 1) / 2.0) / max(ny - 1, 1)
+    terms = [u ** i * v ** j for i in range(order + 1) for j in range(order + 1 - i)]
+    a = np.stack([t[good] for t in terms], 1)
+    if good.sum() < a.shape[1]:
+        return out
+    coefficients, *_ = np.linalg.lstsq(a, values[good], rcond=None)
+    return out - sum(c * t for c, t in zip(coefficients, terms))
+
+
+def level_label(kind: str) -> str:
+    return "" if kind == "none" else f", {dict(LEVELS)[kind].lower()} removed"
 
 
 def _scaled(values: np.ndarray, unit: str) -> tuple:
@@ -50,9 +93,12 @@ def half_steps(extent: tuple, grid: tuple) -> tuple:
 
 
 def draw_map(figure, ax, values: np.ndarray, view: sp.MapView, origin: tuple, name: str, unit: str,
-             current: Optional[int] = None, mask: Optional[np.ndarray] = None, marker_color: Optional[str] = None):
+             current: Optional[int] = None, mask: Optional[np.ndarray] = None, marker_color: Optional[str] = None,
+             leveling: str = "none"):
     """ A result map (one pixel per curve, gray where there is no value), its color bar, the mask in red and the
-        current curve framed; on the screen and in the reports. """
+        current curve framed; on the screen and in the reports. leveling: see level() (the display only). """
+    values = level(values, leveling)
+    name = name + level_label(leveling)
     x0, x1, y0, y1 = view.extent()
     x0, x1, y0, y1 = x0 - origin[0], x1 - origin[0], y0 - origin[1], y1 - origin[1]
     scale, label = _scaled(values, unit)
@@ -77,8 +123,12 @@ def draw_map(figure, ax, values: np.ndarray, view: sp.MapView, origin: tuple, na
 
 
 def draw_image(figure, ax, data: np.ndarray, extent: tuple, origin: tuple, title: str, unit: str,
-               positions: np.ndarray, current: Optional[int] = None, mask: Optional[np.ndarray] = None):
-    """ An image of the file with the positions of the curves (all as dots up to 2500 curves, the masked ones red). """
+               positions: np.ndarray, current: Optional[int] = None, mask: Optional[np.ndarray] = None,
+               leveling: str = "none"):
+    """ An image of the file with the positions of the curves (all as dots up to 2500 curves, the masked ones red).
+        leveling: see level() (the display only). """
+    data = level(data, leveling)
+    title = title + level_label(leveling)
     points = (positions - np.asarray(origin)) * 1e6
     x0, x1, y0, y1 = (extent[0] - origin[0], extent[1] - origin[0], extent[2] - origin[1], extent[3] - origin[1])
     scale, label = _scaled(data, unit)
@@ -123,20 +173,20 @@ class MapPlot(PlotBase):
         return event.button == 1 and self.tool in ("add", "erase") and event.inaxes is self.ax
 
     def show_map(self, values: np.ndarray, view: sp.MapView, origin: tuple, name: str, unit: str,
-                 current: Optional[int], mask: Optional[np.ndarray] = None):
+                 current: Optional[int], mask: Optional[np.ndarray] = None, leveling: str = "none"):
         """ The map of the analyzed part of the grid; positions shown relative to origin (x, y). """
         self._view = view
         self._image_points = None
         x0, x1, y0, y1 = view.extent()
         self._grid, self._extent = view.grid, (x0 - origin[0], x1 - origin[0], y0 - origin[1], y1 - origin[1])
         ax = self.new_axes()
-        draw_map(self.figure, ax, values, view, origin, name, unit, current, mask)
+        draw_map(self.figure, ax, values, view, origin, name, unit, current, mask, leveling=leveling)
         self._rubber = None
         self.canvas.draw_idle()
 
     def show_image(self, data: np.ndarray, extent: tuple, origin: tuple, title: str, unit: str,
                    positions: np.ndarray, current: Optional[int], mask: Optional[np.ndarray] = None,
-                   step: float = 0.0):
+                   step: float = 0.0, leveling: str = "none"):
         """ An image of the file (row 0 at the top) with the positions of the curves on it: picking and masking work
             on the points. extent = (x0, x1, y0, y1) of the image in m (stage coordinates). """
         self._view = None
@@ -144,7 +194,7 @@ class MapPlot(PlotBase):
         self._point_step = step
         self._grid, self._extent = None, None
         ax = self.new_axes()
-        draw_image(self.figure, ax, data, extent, origin, title, unit, positions, current, mask)
+        draw_image(self.figure, ax, data, extent, origin, title, unit, positions, current, mask, leveling)
         self._rubber = None
         self.canvas.draw_idle()
 
@@ -291,6 +341,7 @@ class MapPanel(QtWidgets.QWidget):
             buttons.addWidget(widget)
         buttons.addWidget(self._mask_label, 1)
         self._cells = []
+        self._levels = []
         grid_widget = QtWidgets.QWidget()
         self._grid_layout = QtWidgets.QGridLayout(grid_widget)
         self._grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -298,12 +349,18 @@ class MapPanel(QtWidgets.QWidget):
             combo = ComboEdit(f"Map {i + 1}", [("", "-")], "")
             plot = MapPlot()
             combo.value_changed.connect(lambda _=None, k=i: self._draw(k))
+            leveling = ComboEdit("Display", LEVELS, "none", tooltip=LEVEL_HELP)
+            leveling.value_changed.connect(lambda _=None, k=i: self._draw(k))
+            self._levels.append(leveling)
             plot.curve_clicked.connect(self.curve_clicked)
             plot.mask_edited.connect(self._edit_mask)
             cell = QtWidgets.QWidget()
             cell_layout = QtWidgets.QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
-            cell_layout.addWidget(combo)
+            choice = QtWidgets.QHBoxLayout()
+            choice.addWidget(combo, 3)
+            choice.addWidget(leveling, 2)
+            cell_layout.addLayout(choice)
             cell_layout.addWidget(plot, 1)
             self._cells.append((cell, combo, plot))
         layout = QtWidgets.QVBoxLayout(self)
@@ -330,6 +387,13 @@ class MapPanel(QtWidgets.QWidget):
             plot.tool = tool
         self._tool_buttons[tool].setChecked(True)
 
+    def leveling(self, index: int) -> str:
+        """ The display leveling of map index (see level()). """
+        return self._levels[index].value()
+
+    def set_leveling(self, index: int, kind: str):
+        self._levels[index].set_value(kind)
+
     def parameters(self) -> list:
         return [combo.value() for _, combo, _ in self._cells[:self.count()]]
 
@@ -344,7 +408,7 @@ class MapPanel(QtWidgets.QWidget):
             self.mask = np.zeros(spec.n_curves, bool) if spec is not None else None
         names = results.names() if results is not None else []
         images = [f"image:{key}" for key in self.images]
-        preferred = [n for n in ("E", "adhesion force", "height (contact)", "max indentation", "zero-bias conductance",
+        preferred = [n for n in ("E", "adhesion (minimum retract)", "height (contact)", "max indentation", "zero-bias conductance",
                                  "gap width") if n in names] + names + images
         entries = [(n, n) for n in names] + [(key, f"Image: {key[6:]}") for key in images]
         for i, (_, combo, _) in enumerate(self._cells):
@@ -417,7 +481,7 @@ class MapPanel(QtWidgets.QWidget):
             nx = self.spec.grid[0]
             step = (x1 - x0) / (nx - 1) if nx > 1 else 0.0
             plot.show_image(data, extent, self.origin(), name[6:], unit, self.spec.positions, self.current, self.mask,
-                            step)
+                            step, self.leveling(index))
             return
         if self.results is None:
             plot.clear("Analyze all curves for the maps" + (", or choose an image of the file to pick curves on"
@@ -428,7 +492,7 @@ class MapPanel(QtWidgets.QWidget):
             plot.clear("No value")
             return
         plot.show_map(values, self.view(), self.origin(), name, self.results.units.get(name, ""), self.current,
-                      self.mask_map())
+                      self.mask_map(), self.leveling(index))
 
     # ---- mask ----
     def _edit_mask(self, indices: list, add: bool):

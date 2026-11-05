@@ -16,6 +16,12 @@ Needs NSFopen 2.5.0.
 - **Spectroscopy - thin samples (bottom effect):** Hertz, Sneddon and DMT can correct for the hard substrate under a
   thin sample: one thickness for all curves, or (maps) the height of every curve above the substrate, taken from the
   masked curves. Bonded or not bonded; sphere, cone, pyramid and cylinder punch.
+- **Spectroscopy maps - Display leveling:** line offset, line fit, plane or polynomial 2 / 3 removed from a map (or an
+  image of the file) for the display only; the results keep the measured values.
+- **Spectroscopy:** the value *adhesion force* is now called *adhesion (minimum retract)*, next to *adhesion (fit)* of
+  JKR, DMT and Maugis-Dugdale.
+- **Spectroscopy - faster fits:** long analyses (many curves, JKR, Maugis-Dugdale) run in several processes at once;
+  Hertz, Sneddon and DMT fit about twice as fast.
 - **Tools - Curvature:** *Highest point* / *Lowest point* buttons for the center.
 - **Zoom with a box** in every graph (profile, histogram, PSD, force and I-V curves, statistics): drag with the left
   button; a flat box zooms along x only, a narrow one along y only. The right or middle button pans; images and maps

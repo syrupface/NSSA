@@ -818,6 +818,11 @@ Tools: **Pick curve** (click a pixel to show its curve), **Mask: add** and **Mas
 pixels; on any map, the mask is shared). From a value: *Mask where* a value lies between *from* and *to* (**Mask
 range**), or above its automatic **Otsu** threshold (e.g. the high parts of *height (contact)*, or the stiff parts of
 *E*); **Invert**, **Clear mask**. The masked curves are red on the maps.
+**Display** (next to every map): leveling for the display only, e.g. for the *height (contact)* of a tilted or bowed
+sample, or an image of the file: *Line offset* (the median of every line subtracted), *Line fit* (a straight line of
+every line), *Plane*, *Polynomial 2*, *Polynomial 3* (a surface fitted to the whole map). The color bar says what was
+removed. The results, statistics, histogram, mask (*Mask range*, *Otsu*) and exports keep the measured values; the
+report shows the maps as displayed.
 
 **Statistics**: N, mean, standard deviation, median, minimum and maximum of every value over **all curves**, the curves
 **inside** or **outside the mask** (*Curves*). **Histogram** of any value (*Histogram of*, or click a row of the
@@ -845,7 +850,7 @@ materials. Unknown: 0.3 for hard, 0.5 for soft samples (E changes by at most abo
 
 **Values of every curve (no model)**: max force, contact point (piezo Z) and *height (contact)* (its negative: the
 topography of a force map), max indentation, snap-in force (attraction on the approach), slope of the top half of the
-approach (N/m: the stiffness of cantilever and sample in series), adhesion force (minimum of the retract), pull-off
+approach (N/m: the stiffness of cantilever and sample in series), adhesion (minimum retract) (the measured adhesion: the minimum of the retract curve; JKR and DMT also give *adhesion (fit)*, the pull-off force of the model), pull-off
 distance (piezo retraction from the contact point to the pull-off), adhesion energy (area below zero of the retract),
 dissipated energy (area between approach and retract).
 
@@ -866,6 +871,11 @@ models but JKR, Maugis-Dugdale and Oliver-Pharr only the contact point is search
 *Fit on*: the model's default segment, or approach / retract. The values of the fit are added to *This curve*: E, E*,
 contact point, max indentation, the adhesion and work of adhesion (DMT, JKR, Maugis-Dugdale), λ, μ and σ0
 (Maugis-Dugdale), S, h_c, A, h_f, m (Oliver-Pharr), the residual rms and R².
+
+**Speed.** Hertz, Sneddon and DMT take a few ms per curve, JKR about 20 ms, Maugis-Dugdale about 0.3 s. When the
+first curves show that the rest would take more than about 3 s, the curves are fitted by several processes at once
+(one less than the CPU cores, so the program stays responsive): about 7 times faster on 8 cores. Starting them takes
+about a second, which is why short jobs stay in one process. The results are the same either way.
 
 **Maugis-Dugdale** answers "DMT or JKR?" from the curve itself: the adhesion acts over a zone around the contact, whose
 width is set by λ. For a given λ the work of adhesion follows from the measured pull-off force, so the fit runs through

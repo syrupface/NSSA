@@ -1173,7 +1173,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
         current = self._histogram_of.value()
         self._histogram_of.blockSignals(True)
         self._histogram_of.set_entries([(n, n) for n in names] or [("", "-")])
-        preferred = next((n for n in (current, keep, "E", "adhesion force", "zero-bias conductance") if n in names),
+        preferred = next((n for n in (current, keep, "E", "adhesion (minimum retract)", "zero-bias conductance") if n in names),
                          names[0] if names else None)
         if preferred is not None:
             self._histogram_of.set_value(preferred)
@@ -1374,15 +1374,18 @@ class SpectroscopyPage(QtWidgets.QWidget):
                 f": {dict(contact.MODELS)[curve.fit.model]} fit" if getattr(curve, "fit", None) is not None else "")
         if spec.grid is not None:
             origin, mask_curves = self.maps.origin(), self.maps.mask
-            for name in self.maps.parameters():
+            for index, name in enumerate(self.maps.parameters()):
+                kind = self.maps.leveling(index)
                 if name.startswith("image:") and name[6:] in self.maps.images:
                     data, extent, unit = self.maps.images[name[6:]]
-                    content.maps.append((name[6:], lambda f, a, d=data, e=extent, u=unit, k=name[6:]: (
-                        spec_maps.draw_image(f, a, d, e, origin, k, u, spec.positions, self.current, mask_curves))))
+                    content.maps.append((name[6:], lambda f, a, d=data, e=extent, u=unit, k=name[6:], g=kind: (
+                        spec_maps.draw_image(f, a, d, e, origin, k, u, spec.positions, self.current, mask_curves,
+                                             g))))
                 elif self.results is not None and name:
                     values, view, unit = self.results.map(name), self.results.view(), self.results.units.get(name, "")
-                    content.maps.append((name, lambda f, a, v=values, w=view, u=unit, k=name, m=self.maps.mask_map():
-                                         spec_maps.draw_map(f, a, v, w, origin, k, u, self.current, m, "#b45309")))
+                    content.maps.append((name, lambda f, a, v=values, w=view, u=unit, k=name, m=self.maps.mask_map(),
+                                         g=kind: spec_maps.draw_map(f, a, v, w, origin, k, u, self.current, m,
+                                                                     "#b45309", g)))
         if self.results is not None:
             content.stats_title = f"Statistics: {self._stats_region._combo.currentText().lower()}"
             content.stats_headers = ["Parameter", "N", "Mean", "Std", "Median", "Min", "Max"]

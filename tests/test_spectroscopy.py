@@ -61,10 +61,10 @@ def test_example_force_map():
     assert curve.approach.x[0] < curve.approach.x[-1]           # time order, towards the sample
     assert curve.retract.x[0] > curve.retract.x[-1]
     assert curve.values["max force"][0] == pytest.approx(2.72e-7, rel=0.02)    # stop at 272 nN
-    assert 5e-9 < curve.values["adhesion force"][0] < 20e-9
+    assert 5e-9 < curve.values["adhesion (minimum retract)"][0] < 20e-9
     results = analysis.run()
     assert results.failed() == 0 and len(results.rows) == 100
-    assert results.map("adhesion force").shape == (10, 10)
+    assert results.map("adhesion (minimum retract)").shape == (10, 10)
     spec.close()
 
 
@@ -89,7 +89,7 @@ def test_hertz_fit_of_synthetic_map():
     assert results.failed() == 0
     assert np.all(np.abs(e / 2e9 - 1) < 0.05)
     assert results.statistics()[0][2] == 6
-    adhesion = results.column("adhesion force")
+    adhesion = results.column("adhesion (minimum retract)")
     assert np.allclose(adhesion, 2e-9, rtol=0.1)
 
 

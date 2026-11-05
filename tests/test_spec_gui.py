@@ -89,9 +89,9 @@ def test_masks_statistics_and_histogram_fit(window, tmp_path):
     maps = page.maps
     maps.set_count(4)
     assert sum(cell.isVisibleTo(maps) for cell, _, _ in maps._cells) == 4
-    for i, name in enumerate(["E", "adhesion force", "height (contact)", "work of adhesion"]):
+    for i, name in enumerate(["E", "adhesion (minimum retract)", "height (contact)", "work of adhesion"]):
         maps.set_parameter(i, name)
-    assert maps.parameters() == ["E", "adhesion force", "height (contact)", "work of adhesion"]
+    assert maps.parameters() == ["E", "adhesion (minimum retract)", "height (contact)", "work of adhesion"]
     maps.plots[0].mask_edited.emit([0, 1, 2, 10], True)                 # a drawn rectangle
     assert maps.mask.sum() == 4
     maps.plots[1].mask_edited.emit([1], False)                         # erased on another map: the mask is shared
@@ -316,12 +316,12 @@ def test_spectroscopy_report_pdf_and_pptx(window, tmp_path):
     page._model.set_value("hertz")
     page.run_region()
     page.maps.set_count(4)
-    for i, name in enumerate(["E", "adhesion force", sp.REGION, "image:Z-Axis Sensor (Forward)"]):
+    for i, name in enumerate(["E", "adhesion (minimum retract)", sp.REGION, "image:Z-Axis Sensor (Forward)"]):
         page.maps.set_parameter(i, name)
     page._histogram_of.set_value("E")
     assert page.histogram.fit("gauss")
     content = page.report_content()
-    assert [title for title, _ in content.maps] == ["E", "adhesion force", sp.REGION, "Z-Axis Sensor (Forward)"]
+    assert [title for title, _ in content.maps] == ["E", "adhesion (minimum retract)", sp.REGION, "Z-Axis Sensor (Forward)"]
     assert dict(content.settings)["Model of all curves"].startswith("DMT")
     assert [r[0] for r in content.regions] == ["All curves", "Region 1"] and content.histogram_text.startswith("Gauss")
     header = report.Header(title="Example map", sample="NSFopen example")
