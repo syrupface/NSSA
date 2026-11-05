@@ -103,6 +103,7 @@ class MapPlot(PlotBase):
 
     curve_clicked = Signal(int)
     mask_edited = Signal(list, bool)                  # curve indices, add (True) or erase (False)
+    BOX_ZOOM = False                                  # a map: left drag pans (or draws the mask)
 
     def __init__(self):
         super().__init__()

@@ -104,7 +104,7 @@ def analyze_file(path, settings: BatchSettings, progress: Optional[Callable] = N
     if regions:
         sizes = {max(r["curves"]) + 1 for r in regions if r["curves"]}
         if sizes and max(sizes) > spec.n_curves:
-            notes.append("Fit regions not applied: they are for a larger map.")
+            notes.append("Model regions not applied: they are for a larger map.")
         else:
             for row in results.rows:
                 row[sp.REGION] = 0.0

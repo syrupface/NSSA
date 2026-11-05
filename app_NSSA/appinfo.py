@@ -4,7 +4,7 @@
 import pathlib
 import sys
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 NAME = "NSF Surface and Spectroscopy Analyzer"
 SHORT = "NSSA"                                         # file names, settings, folders
 

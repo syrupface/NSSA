@@ -1,5 +1,5 @@
 """ The report of the Spectroscopy page, as PDF pages or PowerPoint slides with the look of the image report: the
-settings of the analysis and the fit regions, an example curve with its fit, the maps shown, the statistics of the
+settings of the analysis and the model regions, an example curve with its fit, the maps shown, the statistics of the
 chosen curves and the histogram with its fit. The page assembles a SpecReport (drawing functions and tables); this
 module only lays it out. """
 
@@ -16,13 +16,13 @@ import appinfo
 import report
 
 SECTIONS = [("settings", "Analysis settings"), ("curve", "Example curve with its fit"), ("maps", "Maps (as shown)"),
-            ("stats", "Statistics"), ("histogram", "Histogram with its fit"), ("regions", "Fit regions"),
+            ("stats", "Statistics"), ("histogram", "Histogram with its fit"), ("regions", "Model regions"),
             ("info", "File info")]
 DEFAULT_SECTIONS = {"settings", "curve", "maps", "stats", "histogram", "regions"}
 TIPS = {"curve": "The curve shown in the page, with its fit", "maps": "The maps of the Map area, as they are shown "
-        "(with the mask)", "stats": "The statistics of the curves chosen under 'Curves' (all, mask, fit region)",
+        "(with the mask)", "stats": "The statistics of the curves chosen under 'Curves' (all, mask, model region)",
         "histogram": "The histogram of the Histogram tab, with its fit", "regions": "The model settings of all curves "
-        "and of every fit region", "info": "Instrument and measurement parameters from the file"}
+        "and of every model region", "info": "Instrument and measurement parameters from the file"}
 
 
 @dataclasses.dataclass
@@ -105,7 +105,7 @@ def build_pdf(path, header: report.Header, content: SpecReport, sections: set) -
             if content.histogram_text:
                 report._text_lines(pages, "Fit", content.histogram_text.splitlines())
         if "regions" in sections and content.regions:
-            report._table(pages, "Fit regions", "Later regions win where they overlap. The moduli of different "
+            report._table(pages, "Model regions", "Later regions win where they overlap. The moduli of different "
                           "models are not on the same footing.", ["Region", "Model settings", "Curves"],
                           content.regions)
         if content.notes:
@@ -165,7 +165,7 @@ def build_pptx(path, header: report.Header, content: SpecReport, sections: set) 
         if content.histogram_text:
             deck.text(slide, rp.LEFT + width * 0.64, 1.5, width * 0.36, 5.0, content.histogram_text, 12)
     if "regions" in sections and content.regions:
-        slide = deck.slide("Fit regions", "Later regions win where they overlap; the moduli of different models are "
+        slide = deck.slide("Model regions", "Later regions win where they overlap; the moduli of different models are "
                                           "not on the same footing")
         deck.table(slide, rp.LEFT, 1.4, width, ["Region", "Model settings", "Curves"], content.regions[:14], 12,
                    [2.2, width - 3.7, 1.5])

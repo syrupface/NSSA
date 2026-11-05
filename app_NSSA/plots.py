@@ -76,12 +76,15 @@ LABEL_ROLES = {"x": "x axis", "y": "y axis", "colorbar": "color bar", "title": "
 
 
 class PlotBase(QtWidgets.QWidget):
-    """ Matplotlib canvas with mouse navigation: the wheel zooms at the cursor, dragging pans (left button where the
-        graph has no other use for it, right or middle button everywhere), a double-click on an empty spot or Home
-        resets the view, a right-click opens a menu (reset, save, copy). Double-clicking an axis label, the title or
-        the color bar label renames it (the unit is kept); an empty name restores the default. """
+    """ Matplotlib canvas with mouse navigation: the wheel zooms at the cursor; on graphs (BOX_ZOOM) dragging with the
+        left button draws a box that is zoomed into (a flat box zooms only along x, a narrow one only along y), on
+        images it pans; the right or middle button pans everywhere; a double-click on an empty spot or Home resets
+        the view, a right-click opens a menu (reset, save, copy). Double-clicking an axis label, the title or the
+        color bar label renames it (the unit is kept); an empty name restores the default. """
 
     ZOOM_STEP = 1.25
+    BOX_ZOOM = True                                 # left drag: zoom box (graphs); False: left drag pans (images)
+    BOX_MIN = 6                                     # pixels: a box thinner than this zooms the other axis only
 
     labels_changed = Signal()
 
@@ -93,6 +96,7 @@ class PlotBase(QtWidgets.QWidget):
         self.canvas.before_draw = self._apply_labels
         self.canvas.mpl_connect("button_press_event", self._on_label_click)
         self._pan = None                            # (button, start pixel, frozen transform, xlim, ylim, moved)
+        self._box = None                            # (start pixel, rectangle artist) while a zoom box is drawn
         self.canvas.mpl_connect("scroll_event", self._nav_scroll)
         self.canvas.mpl_connect("button_press_event", self._nav_press)
         self.canvas.mpl_connect("motion_notify_event", self._nav_motion)
@@ -203,8 +207,8 @@ class PlotBase(QtWidgets.QWidget):
 
     @property
     def navigating(self) -> bool:
-        """ True while the view is being dragged (the panel's own mouse handling stays out of it). """
-        return self._pan is not None and self._pan[5]
+        """ True while the view is being dragged or a zoom box drawn (the panel's own mouse handling stays out). """
+        return (self._pan is not None and self._pan[5]) or self._box is not None
 
     # ---- mouse navigation ----
 
@@ -269,10 +273,58 @@ class PlotBase(QtWidgets.QWidget):
             return
         if event.button == 3 and self._uses_press(event):
             return
+        if event.button == 1 and self.BOX_ZOOM:
+            self._box = ((event.x, event.y), None)
+            return
         self._pan = (event.button, (event.x, event.y), self.ax.transData.frozen(), self.ax.get_xlim(),
                      self.ax.get_ylim(), False)
 
+    def _box_corners(self, event) -> tuple:
+        """ (x0, y0, x1, y1) in pixels of the zoom box, inside the axes; a thin side spans the whole axis. """
+        (x0, y0), _ = self._box
+        x1 = event.x if event.x is not None else x0
+        y1 = event.y if event.y is not None else y0
+        box = self.ax.bbox
+        x0, x1 = sorted((min(max(x0, box.x0), box.x1), min(max(x1, box.x0), box.x1)))
+        y0, y1 = sorted((min(max(y0, box.y0), box.y1), min(max(y1, box.y0), box.y1)))
+        if x1 - x0 < self.BOX_MIN and y1 - y0 >= self.BOX_MIN:
+            x0, x1 = box.x0, box.x1                     # a narrow box: zoom along y only
+        elif y1 - y0 < self.BOX_MIN and x1 - x0 >= self.BOX_MIN:
+            y0, y1 = box.y0, box.y1                     # a flat box: zoom along x only
+        return x0, y0, x1, y1
+
+    def _box_motion(self, event):
+        from matplotlib.patches import Rectangle
+        start, rectangle = self._box
+        if rectangle is None:
+            if event.x is None or abs(event.x - start[0]) + abs(event.y - start[1]) < 4:
+                return
+            rectangle = Rectangle((0, 0), 0, 0, transform=None, fill=True, facecolor=(0.5, 0.7, 1.0, 0.18),
+                                  edgecolor=plot_style.LINE_COLOR_2, linewidth=1, linestyle="--", zorder=100)
+            self.figure.add_artist(rectangle)
+            self._box = (start, rectangle)
+        x0, y0, x1, y1 = self._box_corners(event)
+        rectangle.set_bounds(x0, y0, x1 - x0, y1 - y0)
+        self.canvas.draw_idle()
+
+    def _box_release(self, event):
+        start, rectangle = self._box
+        if rectangle is None:                           # a click, not a drag
+            self._box = None
+            return
+        x0, y0, x1, y1 = self._box_corners(event)
+        self._box = None
+        rectangle.remove()
+        if x1 - x0 >= self.BOX_MIN or y1 - y0 >= self.BOX_MIN:
+            self._remember_home()
+            self._set_view(self.ax.transData.inverted().transform([(x0, y0), (x1, y1)]))
+        else:
+            self.canvas.draw_idle()
+
     def _nav_motion(self, event):
+        if self._box is not None:
+            self._box_motion(event)
+            return
         if self._pan is None or self._pan[2] is None or event.x is None:
             return
         button, start, transform, xlim, ylim, moved = self._pan
@@ -286,6 +338,9 @@ class PlotBase(QtWidgets.QWidget):
         self._set_view(transform.inverted().transform(corners))
 
     def _nav_release(self, event):
+        if self._box is not None:
+            self._box_release(event)
+            return
         pan, self._pan = self._pan, None
         if pan is not None and pan[0] == 3 and not pan[5]:
             self._context_menu()
@@ -311,6 +366,9 @@ class PlotBase(QtWidgets.QWidget):
     def _context_menu(self):
         menu = QtWidgets.QMenu(self)
         menu.addAction("Reset view (double-click, Home)").triggered.connect(lambda: self.reset_view())
+        if self.BOX_ZOOM:
+            hint = menu.addAction("Zoom: drag a box with the left button, or the wheel; pan with the right button")
+            hint.setEnabled(False)
         menu.addSeparator()
         menu.addAction("Save image...").triggered.connect(lambda: self.save_image())
         menu.addAction("Copy image").triggered.connect(lambda: self.copy_image())
@@ -382,6 +440,8 @@ def _clamp_axis(lo: float, hi: float, bound_lo: float, bound_hi: float, log: boo
 
 class ImageView(PlotBase):
     """ The image with mask overlay and mouse tools. Pixel coordinates in the signals are (x = column, y = row). """
+
+    BOX_ZOOM = False                                # the left button belongs to the tools; dragging pans
 
     line_changed = Signal(object, object)           # start, end in pixel coordinates
     shape_drawn = Signal(str, list)                 # tool name ('rect', 'crop', ...), points in pixel coordinates

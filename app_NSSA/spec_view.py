@@ -24,6 +24,15 @@ PANEL_WIDTH = 440
 FORCE, IV = "force", "iv"
 ANALYSES = [(FORCE, "Force curves (force-distance)"), (IV, "I-V curves (current-voltage)")]
 FIT_SEGMENTS = [("auto", "Model default"), ("approach", "Approach"), ("retract", "Retract")]
+THICKNESS_MODES = [("off", "Thick (no correction)"), ("fixed", "Thin: thickness"), ("map", "Thin: from the height")]
+BOTTOM = [("bonded", "Bonded to the substrate"), ("free", "Not bonded")]
+THICKNESS_HELP = ("Bottom effect: a thin soft sample on a hard substrate (cells, gels, films) feels the substrate, and the "
+                  "plain models read the modulus too high. Hertz, Sneddon and DMT can correct for it:\n"
+                  "Thin: thickness: one thickness for every curve.\n"
+                  "Thin: from the height: the thickness of every curve of a map is its height (contact) above the "
+                  "substrate height (set it, or take it from the masked curves on the substrate).\n"
+                  "Sphere: Dimitriadis et al. 2002 (bonded or not); cone, pyramid, punch: Garcia and Garcia 2018 "
+                  "(bonded, ν = 0.5).")
 COLORS = {"approach": "#4fd1c5", "retract": "#f472b6", "fit": "#fbbf24", "mean": "#e5e7eb"}
 
 
@@ -210,6 +219,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
     message = Signal(str, str)                   # title, text
     maps_to_image = Signal(object)               # an imgdata.ImageFile with the result maps
     show_3d = Signal(object, str)                # the result maps and the value to color the topography with
+    advanced_changed = Signal(bool)              # Basic / Advanced clicked here (the window switches both pages)
 
     def __init__(self, settings: Optional[QtCore.QSettings] = None):
         super().__init__()
@@ -217,7 +227,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self.spec: Optional[sp.SpecFile] = None
         self.results: Optional[sp.Results] = None
         self.base: Optional[dict] = None             # model settings of all curves (the first analysis)
-        self.regions: list = []                      # fit regions: {model, curves, curve_set}
+        self.regions: list = []                      # model regions: {model, curves, curve_set}
         self._results_stale = False
         self.current = 0
         self._curve = None
@@ -241,7 +251,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self._position = QtWidgets.QLabel("")
         self._region_preview = QtWidgets.QCheckBox("Model of its region")
         self._region_preview.setChecked(True)
-        self._region_preview.setToolTip("On: the curve is fitted with the settings of its fit region, as in the results; "
+        self._region_preview.setToolTip("On: the curve is fitted with the settings of its model region, as in the results; "
                                         "off: with the settings of the panel (to try other settings)")
         self._region_preview.setVisible(False)
         self._region_preview.toggled.connect(lambda _: self.refresh())
@@ -291,26 +301,43 @@ class SpectroscopyPage(QtWidgets.QWidget):
                                   tooltip="Hertz and Sneddon: the part of the approach curve used")
         self._op_lower = SciEdit("Unloading from [%]", "", 20.0, 0.0, 99.0, use_prefix=False)
         self._op_upper = SciEdit("to [%]", "", 95.0, 1.0, 100.0, use_prefix=False)
+        self._thickness_mode = ComboEdit("Sample", THICKNESS_MODES, "off", tooltip=THICKNESS_HELP)
+        self._thickness = SciEdit("Thickness", "m", 5e-6, 0.0, tooltip="Thickness of the sample at the curves")
+        self._substrate = SciEdit("Substrate height", "m", 0.0,
+                                  tooltip="Height (contact) of the substrate: the thickness of a curve is its height "
+                                          "(contact) minus this")
+        self._substrate_button = QtWidgets.QPushButton("From the mask")
+        self._substrate_button.setToolTip("The median height (contact) of the masked curves: mask the curves on the "
+                                          "bare substrate first (Map: Mask)")
+        self._substrate_button.clicked.connect(lambda _=False: self.substrate_from_mask())
+        self._bonded = ComboEdit("Bottom", BOTTOM, "bonded",
+                                 tooltip="Bonded: the sample sticks to the substrate (cells, grafted gels); not bonded: "
+                                         "it can slide on it (sphere only)")
+        self._thickness_mode.value_changed.connect(lambda _: self._on_model(self._model.value()))
         self._model_help = QtWidgets.QLabel("")
         self._model_help.setWordWrap(True)
         self._model_help.setStyleSheet("color: #9a9a9a;")
         self._model.value_changed.connect(self._on_model)
         for widget in (self._k, self._sensitivity, self._base_from, self._base_to, self._radius, self._angle,
-                       self._poisson, self._max_force, self._op_lower, self._op_upper):
+                       self._poisson, self._max_force, self._op_lower, self._op_upper, self._thickness, self._substrate):
             widget.value_changed.connect(lambda _: self._changed())
-        for widget in (self._filter, self._baseline, self._shape, self._fit_segment, self._window):
+        for widget in (self._filter, self._baseline, self._shape, self._fit_segment, self._window, self._bonded):
             widget.value_changed.connect(lambda _: self._changed())
         self._x_axis.value_changed.connect(lambda _: self.refresh())
 
         force_page = QtWidgets.QWidget()
         force_layout = QtWidgets.QVBoxLayout(force_page)
         force_layout.setContentsMargins(0, 0, 0, 0)
-        force_layout.addWidget(_group("Calibration", _row(self._k, self._sensitivity)))
-        force_layout.addWidget(_group("Processing", _row(self._filter, self._window), self._baseline,
-                                      _row(self._base_from, self._base_to)))
+        self._calibration_group = _group("Calibration", _row(self._k, self._sensitivity))
+        self._force_processing = _group("Processing", _row(self._filter, self._window), self._baseline,
+                                        _row(self._base_from, self._base_to))
+        force_layout.addWidget(self._calibration_group)
+        force_layout.addWidget(self._force_processing)
         force_layout.addWidget(_group("Contact model", _row(self._model, self._shape),
                                       _row(self._radius, self._angle), _row(self._poisson, self._fit_segment),
-                                      self._max_force, _row(self._op_lower, self._op_upper), self._model_help))
+                                      self._max_force, _row(self._op_lower, self._op_upper),
+                                      _row(self._thickness_mode, self._bonded), _row(self._thickness, self._substrate),
+                                      self._substrate_button, self._model_help))
 
         # I-V curves
         self._iv_filter = ComboEdit("Filter", sp.FILTERS, "none")
@@ -330,8 +357,9 @@ class SpectroscopyPage(QtWidgets.QWidget):
         iv_page = QtWidgets.QWidget()
         iv_layout = QtWidgets.QVBoxLayout(iv_page)
         iv_layout.setContentsMargins(0, 0, 0, 0)
-        iv_layout.addWidget(_group("Processing", _row(self._iv_filter, self._iv_window), self._iv_segments,
-                                   self._iv_offset))
+        self._iv_processing = _group("Processing", _row(self._iv_filter, self._iv_window), self._iv_segments,
+                                     self._iv_offset)
+        iv_layout.addWidget(self._iv_processing)
         iv_layout.addWidget(_group("Analysis", self._iv_derivative, _row(self._iv_zero, self._iv_gap)))
         self._pages = QtWidgets.QStackedWidget()
         self._pages.addWidget(force_page)
@@ -363,11 +391,11 @@ class SpectroscopyPage(QtWidgets.QWidget):
         view_3d.clicked.connect(lambda: self.open_3d())
         self._view_3d = view_3d
         report_button = QtWidgets.QPushButton("Report (PDF or PowerPoint)...")
-        report_button.setToolTip("Settings, fit regions, the curve shown with its fit, the maps shown, the statistics "
+        report_button.setToolTip("Settings, model regions, the curve shown with its fit, the maps shown, the statistics "
                                  "and the histogram with its fit")
         report_button.clicked.connect(lambda: self.save_report())
         folder_button = QtWidgets.QPushButton("Analyze a folder...")
-        folder_button.setToolTip("These settings (processing, model, fit regions, step, quality filter) for every "
+        folder_button.setToolTip("These settings (processing, model, model regions, step, quality filter) for every "
                                  "spectroscopy file of a folder: a CSV per file and a summary table")
         folder_button.clicked.connect(lambda: self.analyze_folder())
         save_settings = QtWidgets.QPushButton("Save settings...")
@@ -379,10 +407,10 @@ class SpectroscopyPage(QtWidgets.QWidget):
 
         self._regions = QtWidgets.QListWidget()
         self._regions.setMaximumHeight(110)
-        self._regions.setToolTip("The model settings of all curves, then the fit regions (later regions win where they "
+        self._regions.setToolTip("The model settings of all curves, then the model regions (later regions win where they "
                                  "overlap). Select one for the buttons below.")
         run_region = QtWidgets.QPushButton("Fit the masked curves with these settings")
-        run_region.setToolTip("A new fit region: the masked curves are fitted with the model, tip and Poisson ratio of "
+        run_region.setToolTip("A new model region: the masked curves are fitted with the model, tip and Poisson ratio of "
                               "the panel; the other curves keep their results")
         run_region.clicked.connect(lambda: self.run_region())
         to_panel = QtWidgets.QPushButton("Settings to the panel")
@@ -396,23 +424,46 @@ class SpectroscopyPage(QtWidgets.QWidget):
         remove = QtWidgets.QPushButton("Remove")
         remove.clicked.connect(lambda: self.remove_region())
         save = QtWidgets.QPushButton("Save...")
-        save.setToolTip("Saves the fit regions (curves and model settings) to apply them again later")
+        save.setToolTip("Saves the model regions (curves and model settings) to apply them again later")
         save.clicked.connect(lambda: self.save_regions())
         load = QtWidgets.QPushButton("Load...")
         load.clicked.connect(lambda: self.load_regions())
-        regions_group = _group("Fit regions (other models for some curves)", self._regions, run_region,
+        regions_group = _group("Model regions (other models for some curves)", self._regions, run_region,
                                _row(to_panel, update), _row(as_mask, remove, save, load))
         self._regions_group = regions_group
 
+        # Basic / Advanced: the same switch as the Image page (the window keeps both in step)
+        self._mode_basic = QtWidgets.QPushButton("Basic")
+        self._mode_advanced = QtWidgets.QPushButton("Advanced")
+        mode_group = QtWidgets.QButtonGroup(self)
+        for button, tip in ((self._mode_basic, "File, curve, contact model and Analyze, with the settings of the file"),
+                            (self._mode_advanced, "All settings: data channels, calibration, processing, export, "
+                                                  "batch and model regions")):
+            button.setCheckable(True)
+            button.setToolTip(tip)
+            mode_group.addButton(button)
+        self._mode_basic.clicked.connect(lambda: self.advanced_changed.emit(False))
+        self._mode_advanced.clicked.connect(lambda: self.advanced_changed.emit(True))
+        self._mode_advanced.setChecked(True)
+        mode_row = QtWidgets.QHBoxLayout()
+        mode_row.addWidget(self._mode_basic)
+        mode_row.addWidget(self._mode_advanced)
+        mode_row.addStretch(1)
+
+        self._data_group = _group("Data", self._analysis, _row(self._x_channel, self._y_channel))
+        self._export_group = _group("Export", _row(export_results, export_curve), _row(to_image, view_3d),
+                                    report_button)
+        self._batch_group = _group("Batch", folder_button, _row(save_settings, load_settings))
         panel = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(panel)
+        layout.addLayout(mode_row)
         layout.addWidget(_group("File", open_button, self._file_label))
         layout.addWidget(_group("Curve", _row(self._curve_number, previous, following), self._position))
-        layout.addWidget(_group("Data", self._analysis, _row(self._x_channel, self._y_channel)))
+        layout.addWidget(self._data_group)
         layout.addWidget(self._pages)
-        layout.addWidget(_group("All curves", _row(self._subset, self._step), self._subset_label, self._run_button,
-                                _row(export_results, export_curve), _row(to_image, view_3d), report_button))
-        layout.addWidget(_group("Batch", folder_button, _row(save_settings, load_settings)))
+        layout.addWidget(_group("Analyze", _row(self._subset, self._step), self._subset_label, self._run_button))
+        layout.addWidget(self._export_group)
+        layout.addWidget(self._batch_group)
         layout.addWidget(regions_group)
         layout.addStretch(1)
         scroll = QtWidgets.QScrollArea()
@@ -500,7 +551,8 @@ class SpectroscopyPage(QtWidgets.QWidget):
 
     # ---- settings ----
     _REMEMBER = ("_min_r2", "_filter", "_window", "_baseline", "_base_from", "_base_to", "_model", "_shape", "_radius", "_angle",
-                 "_poisson", "_fit_segment", "_max_force", "_op_lower", "_op_upper", "_x_axis", "_iv_filter",
+                 "_poisson", "_fit_segment", "_max_force", "_op_lower", "_op_upper", "_thickness_mode",
+                 "_thickness", "_substrate", "_bonded", "_x_axis", "_iv_filter",
                  "_iv_window", "_iv_derivative", "_iv_zero", "_iv_gap", "_iv_segments", "_iv_plot")
 
     def _load_settings(self):
@@ -541,7 +593,9 @@ class SpectroscopyPage(QtWidgets.QWidget):
             baseline_from=self._base_from.value(), baseline_to=self._base_to.value(), model=self._model.value(),
             shape=self._shape.value(), radius=self._radius.value(), half_angle=self._angle.value(),
             poisson=self._poisson.value(), fit_segment=self._fit_segment.value(),
-            fit_max_force=self._max_force.value(), op_lower=self._op_lower.value(), op_upper=self._op_upper.value())
+            fit_max_force=self._max_force.value(), op_lower=self._op_lower.value(), op_upper=self._op_upper.value(),
+            thickness_mode=self._thickness_mode.value(), thickness=self._thickness.value(),
+            substrate=self._substrate.value(), bonded=self._bonded.value() == "bonded")
 
     def iv_settings(self) -> iv.IVSettings:
         return iv.IVSettings(x_channel=self._x_channel.value(), y_channel=self._y_channel.value(),
@@ -669,8 +723,28 @@ class SpectroscopyPage(QtWidgets.QWidget):
         iv_mode = self._analysis.value() == IV
         for widget in (self._x_axis, self._show_approach, self._show_retract, self._zoom):
             widget.setVisible(not iv_mode)
-        self._regions_group.setVisible(not iv_mode)
         self._iv_plot.setVisible(iv_mode)
+        self._apply_mode()
+
+    # ---- Basic / Advanced ----
+
+    def advanced(self) -> bool:
+        return self._mode_advanced.isChecked()
+
+    def set_advanced(self, on: bool):
+        """ Basic: File, Curve, Contact model (I-V: Analysis) and Analyze, with the settings of the file; Advanced:
+            everything. Hidden settings keep their values. """
+        (self._mode_advanced if on else self._mode_basic).setChecked(True)
+        self._apply_mode()
+
+    def _apply_mode(self):
+        on = self.advanced()
+        iv_mode = self._analysis.value() == IV
+        for group in (self._data_group, self._force_processing, self._iv_processing, self._export_group,
+                      self._batch_group):
+            group.setVisible(on)
+        self._calibration_group.setVisible(True)            # small, and worth checking: shown in both modes
+        self._regions_group.setVisible(on and not iv_mode)
 
     def subset(self) -> list:
         """ The curves 'Analyze' fits: the step and the region chosen. """
@@ -701,8 +775,33 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self._max_force.setEnabled(model in ("hertz", "sneddon"))
         self._op_lower.setEnabled(model == "oliver_pharr")
         self._op_upper.setEnabled(model == "oliver_pharr")
+        thin = model in contact.BOTTOM_MODELS
+        mode = self._thickness_mode.value()
+        self._thickness_mode.setEnabled(thin)
+        self._bonded.setEnabled(thin and mode != "off")
+        self._thickness.setEnabled(thin and mode == "fixed")
+        for widget in (self._substrate, self._substrate_button):
+            widget.setEnabled(thin and mode == "map")
         self._model_help.setText(contact.MODEL_HELP.get(model, ""))
         self._changed()
+
+    def substrate_from_mask(self) -> bool:
+        """ Substrate height = the median height (contact) of the masked curves (on the bare substrate). """
+        if self.spec is None or self.maps.mask is None or not np.any(self.maps.mask):
+            self.message.emit("Substrate height", "Mask the curves on the bare substrate first (Map: Mask).")
+            return False
+        curves = np.nonzero(self.maps.mask)[0]
+        QtWidgets.QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            height = sp.substrate_height(sp.ForceAnalysis(self.spec, self.force_settings()), curves)
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+        if not math.isfinite(height):
+            self.message.emit("Substrate height", "None of the masked curves has a contact point.")
+            return False
+        self._substrate.set_value(height)
+        self.status.emit(f"Substrate height {sp.format_value(height, 'm', 4)} from {curves.size} masked curves")
+        return True
 
     def _changed(self):
         if self._loading:
@@ -750,7 +849,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
             model = self.base if number == 0 else self.regions[number - 1]["model"]
             if model is not None:
                 analysis = sp.ForceAnalysis(self.spec, self.settings_for(model))
-                title += f" ({'all curves' if number == 0 else f'fit region {number}'})"
+                title += f" ({'all curves' if number == 0 else f'model region {number}'})"
         try:
             if isinstance(analysis, iv.IVAnalysis):
                 curve = analysis.curve(n)
@@ -793,7 +892,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
 
     # ---- all curves ----
     def analyze_all(self) -> Optional[sp.Results]:
-        """ Fits the chosen curves (step, region) with the settings of all curves, then every fit region with its own
+        """ Fits the chosen curves (step, region) with the settings of all curves, then every model region with its own
             model settings (later regions win where they overlap). """
         analysis = self.analysis()
         if analysis is None:
@@ -856,33 +955,33 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self._fill_results()
         failed = self.results.failed()
         self.status.emit(f"Analyzed {len(self.results.rows)} curves" + (f", {failed} with an error" if failed else "")
-                         + (f", {len(self.regions)} fit region{'s' if len(self.regions) > 1 else ''}"
+                         + (f", {len(self.regions)} model region{'s' if len(self.regions) > 1 else ''}"
                             if self.regions else ""))
         self._tabs.setCurrentIndex(1)
         return self.results
 
-    # ---- fit regions: other model settings for some curves ----
+    # ---- model regions: other model settings for some curves ----
     def settings_for(self, model: dict) -> sp.ForceSettings:
-        """ The processing of the panel with the model settings of a fit region. """
+        """ The processing of the panel with the model settings of a model region. """
         import dataclasses
         return dataclasses.replace(self.force_settings(), **model)
 
     def region_of(self, n: int) -> int:
-        """ The fit region of curve n: 0 = all curves, k = region k (the last region that holds it). """
+        """ The model region of curve n: 0 = all curves, k = region k (the last region that holds it). """
         for number in range(len(self.regions), 0, -1):
             if n in self.regions[number - 1]["curve_set"]:
                 return number
         return 0
 
     def run_region(self, curves=None) -> Optional[sp.Results]:
-        """ A new fit region: the masked curves (or the given ones) fitted with the model settings of the panel. The
+        """ A new model region: the masked curves (or the given ones) fitted with the model settings of the panel. The
             other curves keep their results. """
         if self.spec is None or self._analysis.value() == IV:
-            self.message.emit("Fit regions", "Fit regions are for force curves.")
+            self.message.emit("Model regions", "Model regions are for force curves.")
             return None
         curves = np.nonzero(self.maps.mask)[0] if curves is None and self.maps.mask is not None else curves
         if curves is None or len(curves) == 0:
-            self.message.emit("Fit regions", "Mask the curves of the region first (Map: Mask: add, Otsu or Mask range).")
+            self.message.emit("Model regions", "Mask the curves of the region first (Map: Mask: add, Otsu or Mask range).")
             return None
         if self.results is None or self.base is None:
             self.base = sp.model_settings(self.force_settings())
@@ -900,7 +999,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self._fill_regions()
         self._fill_results()
         self.refresh()
-        self.status.emit(f"Fit region {len(self.regions)}: {len(curves)} curves with {sp.describe_model(model)}")
+        self.status.emit(f"Model region {len(self.regions)}: {len(curves)} curves with {sp.describe_model(model)}")
         return self.results
 
     def _fill_regions(self):
@@ -911,10 +1010,10 @@ class SpectroscopyPage(QtWidgets.QWidget):
         self._regions.clear()
         self._regions.addItems(rows)
         self._regions.setCurrentRow(min(max(current, 0), len(rows) - 1))
-        entries = list(CurveHistogram.REGIONS) + [(f"region:{k}", f"Fit region {k} ({r['model']['model']})")
+        entries = list(CurveHistogram.REGIONS) + [(f"region:{k}", f"Model region {k} ({r['model']['model']})")
                                                   for k, r in enumerate(self.regions, start=1)]
         if self.regions:
-            entries.insert(3, ("region:0", "All curves outside the fit regions"))
+            entries.insert(3, ("region:0", "All curves outside the model regions"))
         current = self._stats_region.value()
         self._stats_region.blockSignals(True)
         self._stats_region.set_entries(entries)
@@ -926,11 +1025,12 @@ class SpectroscopyPage(QtWidgets.QWidget):
         return max(self._regions.currentRow(), 0)
 
     def region_settings_to_panel(self, number: Optional[int] = None):
-        """ Puts the model settings of a fit region (0 = all curves) into the panel, to look at or change them. """
+        """ Puts the model settings of a model region (0 = all curves) into the panel, to look at or change them. """
         number = self._selected_region() if number is None else number
         model = self.base if number == 0 else self.regions[number - 1]["model"]
         if model is None:
             return
+        model = sp.complete_model(model)
         self._loading = True
         try:
             self._model.set_value(model["model"])
@@ -939,15 +1039,18 @@ class SpectroscopyPage(QtWidgets.QWidget):
             self._shape.set_value(model["shape"])
             for name, widget in (("radius", self._radius), ("half_angle", self._angle), ("poisson", self._poisson),
                                  ("fit_max_force", self._max_force), ("op_lower", self._op_lower),
-                                 ("op_upper", self._op_upper)):
+                                 ("op_upper", self._op_upper), ("thickness", self._thickness),
+                                 ("substrate", self._substrate)):
                 widget.set_value(float(model[name]))
             self._fit_segment.set_value(model["fit_segment"])
+            self._thickness_mode.set_value(model["thickness_mode"])
+            self._bonded.set_value("bonded" if model["bonded"] else "free")
         finally:
             self._loading = False
         self.refresh()
 
     def update_region(self, number: Optional[int] = None) -> Optional[sp.Results]:
-        """ The model settings of the panel for a fit region (0 = all curves), then everything fitted again. """
+        """ The model settings of the panel for a model region (0 = all curves), then everything fitted again. """
         number = self._selected_region() if number is None else number
         model = sp.model_settings(self.force_settings())
         if number == 0:
@@ -976,41 +1079,42 @@ class SpectroscopyPage(QtWidgets.QWidget):
     def save_regions(self, path=None) -> bool:
         import json
         if path is None:
-            default = self.spec.path.with_name(self.spec.path.stem + "_fit_regions.json")
-            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save fit regions", str(default), "JSON (*.json)")
+            default = self.spec.path.with_name(self.spec.path.stem + "_model_regions.json")
+            path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save model regions", str(default), "JSON (*.json)")
             if not path:
                 return False
-        content = {"format": "nssa-fit-regions", "version": 1, "curves": self.spec.n_curves,
+        content = {"format": "nssa-model-regions", "version": 1, "curves": self.spec.n_curves,
                    "all curves": self.base, "regions": [{"model": r["model"], "curves": [int(n) for n in r["curves"]]}
                                                         for r in self.regions]}
         try:
             pathlib.Path(path).write_text(json.dumps(content, indent=1), encoding="utf-8")
         except OSError as e:
-            self.message.emit("Save fit regions", str(e))
+            self.message.emit("Save model regions", str(e))
             return False
         return True
 
     def load_regions(self, path=None) -> bool:
         import json
         if path is None:
-            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load fit regions", str(self.spec.path.parent),
+            path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load model regions", str(self.spec.path.parent),
                                                             "JSON (*.json)")
             if not path:
                 return False
         try:
             content = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-            regions = [{"model": {k: r["model"][k] for k in sp.MODEL_FIELDS},
+            regions = [{"model": sp.complete_model(r["model"]),
                         "curves": np.asarray(r["curves"], int)} for r in content["regions"]]
         except (OSError, ValueError, KeyError, TypeError) as e:
-            self.message.emit("Load fit regions", f"Not a fit region file: {e}")
+            self.message.emit("Load model regions", f"Not a model region file: {e}")
             return False
         if content.get("curves") != self.spec.n_curves:
-            self.message.emit("Load fit regions", f"The regions are for a map of {content.get('curves')} curves, this "
+            self.message.emit("Load model regions", f"The regions are for a map of {content.get('curves')} curves, this "
                                                   f"file has {self.spec.n_curves}.")
             return False
         for region in regions:
             region["curve_set"] = set(region["curves"].tolist())
-        self.base = content.get("all curves")
+        base = content.get("all curves")
+        self.base = sp.complete_model(base) if isinstance(base, dict) else sp.model_settings(self.force_settings())
         self.regions = regions
         self.analyze_all()
         return True
@@ -1378,9 +1482,14 @@ class SpectroscopyPage(QtWidgets.QWidget):
             for name, widget in (("baseline_from", self._base_from), ("baseline_to", self._base_to),
                                  ("radius", self._radius), ("half_angle", self._angle), ("poisson", self._poisson),
                                  ("fit_max_force", self._max_force), ("op_lower", self._op_lower),
-                                 ("op_upper", self._op_upper)):
+                                 ("op_upper", self._op_upper), ("thickness", self._thickness),
+                                 ("substrate", self._substrate)):
                 if force.get(name) is not None:
                     widget.set_value(float(force[name]))
+            if force.get("thickness_mode") in self._thickness_mode.keys():
+                self._thickness_mode.set_value(force["thickness_mode"])
+            if "bonded" in force:
+                self._bonded.set_value("bonded" if force["bonded"] else "free")
             for name, widget in (("filter", self._iv_filter), ("segments", self._iv_segments)):
                 if name in ivs:
                     widget.set_value(ivs[name])
@@ -1460,7 +1569,7 @@ class SpectroscopyPage(QtWidgets.QWidget):
                 f"Settings of this page: {dict(ANALYSES)[self._analysis.value()]}"
                 + (f"; {sp.describe_model(self.batch_settings().force)}" if self._analysis.value() == FORCE else "")
                 + (f"; every {self._step.value()}. line and column" if self._step.value() > 1 else "")
-                + (f"; {len(self.regions)} fit region(s) (for maps of the same size)" if self.regions else "")
+                + (f"; {len(self.regions)} model region(s) (for maps of the same size)" if self.regions else "")
                 + (f"; quality filter R² ≥ {self._min_r2.value():g}" if self._min_r2.value() > 0 else ""))
             text.setWordWrap(True)
             buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)

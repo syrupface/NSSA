@@ -62,11 +62,11 @@ def _batch(argv: list) -> int:
     return 1 if failed else 0
 
 
-NSFOPEN_MIN = (2, 4, 0)
+NSFOPEN_MIN = (2, 5, 0)
 
 
 def check_nsfopen() -> str:
-    """ '' if NSFopen >= 2.4.0 (image processing, spectroscopy, color maps) is installed, else what to do. """
+    """ '' if NSFopen >= 2.5.0 (image processing, spectroscopy, color maps, terraces) is installed, else what to do. """
     try:
         import NSFopen
         from NSFopen.process import ops  # noqa: F401

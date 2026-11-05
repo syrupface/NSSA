@@ -70,7 +70,7 @@ a recorded operation: it can be undone, saved as a *macro* and replayed on other
 | Tools menu | **Batch processing**, **Stitch images**, **Combine channels (lateral force)**, **Grain analysis** (Ctrl+G, section 12), **Measure lattice** (section 13c) |
 | Pages | **Image** (this manual, sections 1-16), **Spectroscopy** (force curves, force maps and I-V curves, section 17), **3D View**, **Help** |
 | Help menu | **User manual** (F1, the *Help* page) and **About** (version of the program, NSFopen, Qt and the other libraries; please give it with any error report) |
-| Mouse in the graphs | In **every graph** (image, profile, histogram, PSD, ...): the **mouse wheel zooms** at the cursor (also on logarithmic axes; never further out than the whole image or graph, and panning stops at its edges; the scale bar follows the zoom with a suitable length and unit), **dragging pans** (left button where it has no other use: the *Navigate* tool on the image, empty areas of the other graphs; right or middle button always), a **double-click** on an empty spot (or Home) shows the whole graph again, a **right-click** opens a menu: *Reset view*, *Save image...* (PNG, SVG, PDF), *Copy image*, and on the image *Clear line cut*, *Clear mask* (an undoable step), *Show mask*, and *Scale bar*; on the profile *Clear line cut* |
+| Mouse in the graphs | In **every graph** (image, profile, histogram, PSD, ...): the **mouse wheel zooms** at the cursor (also on logarithmic axes; never further out than the whole image or graph, and panning stops at its edges; the scale bar follows the zoom with a suitable length and unit), on the graphs (profile, histogram, PSD, force curve, ...) **dragging with the left button draws a box** that is zoomed into (a flat box zooms along x only, a narrow one along y only; where the left button has another use, such as a cursor, that use comes first), on the image and the maps the left button **pans** (the *Navigate* tool); the **right or middle button pans** everywhere, a **double-click** on an empty spot (or Home) shows the whole graph again, a **right-click** opens a menu: *Reset view*, *Save image...* (PNG, SVG, PDF), *Copy image*, and on the image *Clear line cut*, *Clear mask* (an undoable step), *Show mask*, and *Scale bar*; on the profile *Clear line cut* |
 | Pages | **Image**, **3D View** (section 13b), **Help** (this text) |
 
 **Tools** above the image, in groups separated by lines: *Navigate* | *Measure* (Line cut) | *Level* (3-point) |
@@ -619,6 +619,54 @@ forward and backward images, or use the sensor correction (8a). A line grating (
 image without order gives a message; measure a grating pitch with a line cut. Example: *Moire_TRM_1.nhf*, Phase 2 after line
 leveling: |a| = 13.34 nm, |b| = 13.28 nm, 63.1°, 440 maxima; the Amplitude channel of the same scan gives 13.32 / 13.26 nm.
 
+### 13d. Curvature (*Tools - Curvature*)
+
+Fits a quadratic surface to the image and gives its **principal radii of curvature** R1 and R2 (R1 the more strongly
+curved direction), their directions (degrees counterclockwise from the x axis as shown), the **center** of the
+paraboloid (where its slope is zero; it may lie outside the image), the **bow** (peak to valley of the fitted surface)
+and the fit rms. For wafer bow, lenses and microlenses, spheres and tips, bent cantilevers and membranes. A positive
+radius curves up (a bowl or valley), a negative one down (a dome or ridge); a cylinder has one infinite radius and no
+single center. *Fit on* uses all pixels, only the masked ones (e.g. a lens) or the rest. The picture shows the image
+with the center and the two principal directions, and the profiles along them with the fit (dashed). *Subtract the
+fit* removes the quadratic surface from the image (*Polynomial* of order 2 on the same pixels, so it can be undone and
+saved in a macro).
+
+**Center by hand:** when the found center is not the one you mean (the apex of a lens, the middle of a dimple), click
+or drag on the image, or type *Center x* and *Center y* (from the left and the top edge). The fit is then made with
+the vertex of the surface at that point, the radii and directions are measured about it and the profiles run through
+it; *Highest point* / *Lowest point* put it at the top of a dome or the bottom of a bowl (the highest or lowest point
+of the fit region, smoothed over 2 pixels so one noisy pixel does not decide it); *Automatic center* goes back to the
+fitted one (the point where the fitted surface has no slope). A tilt of the sample moves the vertex, so level the plane first
+(*Level*): with a fixed center the fit cannot follow a tilt, which shows as a large fit rms. The radii are exact at the center of a quadratic surface; for a sphere the fit reads about 1 % small
+when the image is a fifth of the radius wide (a sphere is not exactly a paraboloid).
+
+### 13e. Terrace analysis (*Tools - Terrace analysis*)
+
+For stepped surfaces: atomic steps of a crystal (silicon, sapphire, HOPG, mica after cleaving), vicinal wafers, layered
+materials. The image is divided into **terraces** at the steps, a smooth **background** (tilt, bow) is fitted together
+with one height per terrace, and the **step height** is the common step of which the terrace heights are integer
+multiples. A polynomial leveling would tilt a staircase; here the terraces become flat and the steps stay.
+
+Align the rows first (*Align rows*): scan line offsets are otherwise taken for steps. The settings act at once:
+
+| Setting | |
+|---|---|
+| Steps | *Found from the slopes* (where the local slope differs from the background), *The mask* (draw the steps with the mask tools, or threshold them, where they are too faint to be found), or both |
+| Smoothing | pixels of Gaussian smoothing before the slopes are measured: more for noisy images |
+| Threshold low / high | in units of the noise of the slope. A step needs some pixels above *high*; its weaker parts count down to *low*. Lower values close gaps in the steps (terraces that run into each other through a gap are counted as one) |
+| Broaden | pixels added on both sides of a step and left out of the fit |
+| Min. terrace | smaller areas between steps are not counted |
+| Background degree | of the polynomial: 1 tilt, 2 bow, 3 (default) or more for more complex shapes; 0 for an image that is leveled already |
+| Step height | 0 finds it; enter a known step (0.314 nm for Si(111), 0.216 nm for sapphire c-plane) to get the levels and the background with it |
+
+The picture shows the image without the background with the steps in red, and the terrace heights against their
+levels with the fitted line. The table lists every terrace from the lowest up: height, level, size and roughness.
+The step height comes with its standard error from the fit and the *periodicity* (1: the terrace heights are exact
+multiples of the step). On simulated surfaces the step is found within about 1 %, which is below the usual uncertainty of
+an AFM height calibration; with a known step the analysis also calibrates the height scale. Fewer than three levels
+give no step height (the difference of two levels is shown). *Level the image* subtracts the fitted background as the
+operation *Terrace level* (undo, macros, batch); *Copy* and *Save table (CSV)* export the results.
+
 ## 14. Macros and batch
 
 A **macro** is the list of steps applied to a file, saved so that other files can be processed the same way.
@@ -734,7 +782,7 @@ each channel are also in the notes of its image slide.
 - Rotation of the scan frame is not applied. Time-resolved or multi-image Studio files show every image group's channels, prefixed
   by the group name.
 - Not included: drift or distortion correction (except the position sensors, 8a), tip deconvolution, rotation by
-  angles other than 90°, sub-pixel registration of stitched images, terrace analysis, curvature fitting.
+  angles other than 90°, sub-pixel registration of stitched images.
 - **Stand-alone program** (`NSSA.exe`, nothing else to install): the first version leaves out the
   optional parts: no PowerPoint report (PDF works) and the built-in `.nhf` reader instead of Nanosurf's (own color maps:
   gradient files in `colormaps` next to the .exe). An unexpected error is shown in a
@@ -748,6 +796,11 @@ Force-distance curves, force maps and I-V curves of Nanosurf `.nid` (Mobile S, E
 (Nanosurf Studio) files, read with NSFopen. **Open** them like images (Open, drop on the window, Open recent) or with
 *Open spectroscopy file* on the page: a spectroscopy file shows its curves here, and the images it holds (a force map
 records the topography too) in the *Image* page.
+
+**Basic / Advanced** (buttons at the top of the panel; the same switch as on the Image page, so switching here switches
+both): **Basic** shows *File*, *Curve*, *Calibration* (spring constant and sensitivity, to check them), *Contact model*
+(for I-V curves: *Analysis*) and *Analyze*, and uses the channels and processing found in the file. **Advanced** adds
+*Data* (analysis and channels), *Processing*, *Export*, *Batch* and *Model regions*. Hidden settings keep their values.
 
 **Layout** (like the Image page): the settings on the left; for a **force map** the **maps** in the center; the
 current **curve** with its fit top right; below it the tabs **This curve** (all values), **Statistics**, **Histogram**
@@ -804,32 +857,58 @@ dissipated energy (area between approach and retract).
 | **Sneddon** | sphere (exact), cone, pyramid, cylinder punch, hyperboloid | approach | elastic samples, any tip shape |
 | **DMT** | all five | retract, from the maximum to the pull-off | stiff samples with small adhesion: F = E* g(h) − F_ad with the measured pull-off force; work of adhesion W = F_ad / 2πR for a sphere |
 | **JKR** | sphere | retract, through the pull-off | soft samples with strong adhesion: E* and the work of adhesion W |
+| **Maugis-Dugdale** | sphere | retract, through the pull-off | any adhesive sample, between DMT and JKR: E*, W and the Maugis parameter λ (with the Tabor parameter μ = 1.157 λ and the adhesive stress σ0). Small λ (below about 0.1): DMT applies; large λ (above about 5): JKR applies |
 | **Oliver-Pharr** | all five | retract (unloading), between *Unloading from* and *to* % of the max force | elastic-plastic samples: power law F = α (h − h_f)^m, stiffness S at the maximum, contact depth h_c = h_max − ε F_max / S, area A(h_c), E_r = √π S / (2√A) |
 
 Shapes: **sphere** (radius R), **cone** (half opening angle α), **pyramid** with 4 faces (α between the axis and a
 face), **cylinder punch** (flat end of radius R), **hyperboloid** (apex radius R, asymptotic half angle α). For all
-models but JKR and Oliver-Pharr only the contact point is searched; the modulus follows from it by least squares.
+models but JKR, Maugis-Dugdale and Oliver-Pharr only the contact point is searched; the modulus follows from it by least squares.
 *Fit on*: the model's default segment, or approach / retract. The values of the fit are added to *This curve*: E, E*,
-contact point, max indentation, the adhesion and work of adhesion (DMT, JKR), S, h_c, A, h_f, m (Oliver-Pharr), the
-residual rms and R².
+contact point, max indentation, the adhesion and work of adhesion (DMT, JKR, Maugis-Dugdale), λ, μ and σ0
+(Maugis-Dugdale), S, h_c, A, h_f, m (Oliver-Pharr), the residual rms and R².
+
+**Maugis-Dugdale** answers "DMT or JKR?" from the curve itself: the adhesion acts over a zone around the contact, whose
+width is set by λ. For a given λ the work of adhesion follows from the measured pull-off force, so the fit runs through
+λ in small steps and refines the best one; it takes about 0.3 s per curve (a map of 1000 curves: about 5 minutes).
+Above λ ≈ 3 the curve hardly changes any more (the JKR limit): λ is then only a lower bound, while E* and W stay
+reliable. λ needs the part of the retract curve around the pull-off: keep the retract curve long enough.
+
+**Thin samples (bottom effect)**: a soft sample of a few µm or less on glass or silicon (cells, gels, films) feels the
+hard substrate, and Hertz reads the modulus too high (often 2 times and more on the thin parts of a cell). *Sample*
+(Contact model, Hertz, Sneddon and DMT):
+- *Thick (no correction)*: the default.
+- *Thin: thickness*: one *Thickness* for all curves.
+- *Thin: from the height* (maps): the thickness of every curve is its *height (contact)* minus the *Substrate height*.
+  Mask the curves on the bare substrate and press **From the mask** (their median height), or type it. Curves at or
+  below the substrate are fitted without the correction.
+- *Bottom*: *Bonded to the substrate* (cells, grafted gels: the usual case) or *Not bonded* (the sample can slide; sphere
+  only).
+
+The force of the model is multiplied by f = 1 + c1 χ + c2 χ² + c3 χ³ + c4 χ⁴: sphere χ = √(R h) / T (Dimitriadis et al.
+2002, with the Poisson ratio of the panel), cone χ = h tan α / T, pyramid as the cone of the same force, cylinder punch
+χ = R / T (Garcia and Garcia 2018, bonded, ν = 0.5); h is the indentation, T the thickness. The results get *sample
+thickness*, *bottom χ* (at the maximum indentation) and *bottom factor* (f there: 1.5 means the plain model read 1.5
+times too stiff). The series hold up to χ ≈ 1; above that the result is an estimate: indent less, or use a larger
+thickness. In a batch the substrate height is the same number for all files: use *Thin: thickness* there, or a
+substrate height that holds for all of them.
 
 Notes: the tip radius and angle are not stored in the files: set them (the modulus of Hertz scales with 1/√R). Stiff
 samples with a soft cantilever indent only a few nm: the modulus is then uncertain (look at R² and the spread in
 *Statistics*). Oliver-Pharr assumes no adhesion (an adhesion offset makes the modulus too low) and needs a reliable
 contact point, since the contact area depends on the depth from it.
 
-**Fit regions: other models for some curves.** Different parts of a surface can need different models (a soft,
+**Model regions: other models for some curves.** Different parts of a surface can need different models (a soft,
 sticky polymer domain: JKR or Hertz; a stiff substrate: DMT; plastic deformation: Oliver-Pharr), and different tips or
 Poisson ratios. Workflow: analyze all curves; mask the curves of a part (Map: *Mask: add*, *Otsu* or *Mask range*);
 set the model, tip and Poisson ratio in the panel; **Fit the masked curves with these settings**. Those curves are
-fitted again and keep the other curves' results; repeat for more parts. The list *Fit regions* shows *All curves* (their
+fitted again and keep the other curves' results; repeat for more parts. The list *Model regions* shows *All curves* (their
 model settings) and every region (later regions win where they overlap). Select an entry for: **Settings to the panel**
 (to look at them), **Use the panel settings** (that entry gets the model settings of the panel; everything is fitted
 again), **Curves to the mask**, **Remove**, **Save...** / **Load...** (the regions with their curves and settings, to
 apply them again). The processing (filter, baseline, spring constant) is the same for all regions; **Analyze**
 applies everything again: the settings of all curves, then every region. The results get a **model** text and a
-**fit region** value (0 = all curves): show *fit region* as a map next to *E* to see which model made which pixel, and
-choose *Curves: Fit region k* (or *All curves outside the fit regions*) for the statistics and the histogram. The CSV has
+**model region** value (0 = all curves): show *model region* as a map next to *E* to see which model made which pixel, and
+choose *Curves: Model region k* (or *All curves outside the model regions*) for the statistics and the histogram. The CSV has
 both columns. *Model of its region* (bar above the curve) fits the curve with the settings of its region as in the
 results; off, with the settings of the panel (to try other settings on that curve).
 Caution: the moduli of different models are not on the same footing (DMT and JKR treat the adhesion differently,
@@ -846,13 +925,13 @@ normalized conductance (dI/dV)/(I/V) (broadened near 0 V), log |I|, and the Fowl
 current at 0 V, the **gap** around 0 V where |I| stays below *Gap: \|I\| below* (width, from, to; marked in red), the
 rectification ratio |I(+V)/I(−V)| at the largest common |V|, and the max |current|.
 
-### 17c. All curves
+### 17c. Analyze and Export
 
 **Partial maps**: *Every n-th line and column* analyzes a coarse map (n = 4: one curve in 16, 16 times faster) to look
 at the data first; *Curves: The region of the mask* analyzes the rectangle of lines and columns around the masked
 curves (at any step), e.g. a region of the coarse map at full resolution. The maps then show the analyzed part; the
-label below says how many curves will be fitted. **Analyze** fits the chosen curves with the current settings (a progress bar for more than 50 curves; changing a
-setting afterwards marks the results as old) and fills *Statistics* and *Map*. **Export results (CSV)**: one row per
+label below says how many curves will be fitted (group *Analyze*). **Analyze** fits the chosen curves with the current settings (a progress bar for more than 50 curves; changing a
+setting afterwards marks the results as old) and fills *Statistics* and *Map*. Group *Export*: **Export results (CSV)**: one row per
 curve with its position and every value (SI units in the column names) and the error of curves that could not be
 fitted. **Export this curve (CSV)**: the processed curve (piezo Z, force, tip position, force before the baseline; for
 I-V: bias, current, dI/dV); with a mask the results have a *masked* column (1 / 0). **Result maps to the Image tab**
@@ -877,18 +956,18 @@ surface looks like, e.g. only the curves on a particle.
 
 **Report (PDF or PowerPoint)...** writes a report of the page: analysis settings, the curve shown with its fit, the
 maps as they are shown (with the mask), the statistics of the curves chosen under *Curves*, the histogram with its fit,
-the fit regions and the file info. Pick the sections in the dialog; the choice is remembered. PowerPoint needs the
+the model regions and the file info. Pick the sections in the dialog; the choice is remembered. PowerPoint needs the
 optional python-pptx package.
 
 **Save settings... / Load settings...** (group *Batch*) store the whole analysis in a JSON file: analysis type,
-processing, model, the step of a partial map, the quality filter and the fit regions. Load it to repeat the same
+processing, model, the step of a partial map, the quality filter and the model regions. Load it to repeat the same
 analysis on another file.
 
 **Analyze a folder...** runs these settings on every .nid and .nhf in a folder (not its subfolders) and writes one CSV per
 file (`<file>_spectroscopy.csv`, like *Export results*) and `results.csv` with one row per file: number of curves,
 analyzed, failed, left out, then mean, standard deviation, median and N of every value, and an error column for files
 that could not be read. By default each file's own spring constant and sensitivity are used; untick the box to use
-those of the page for all files. Fit regions only fit maps of the same size as the one they were drawn on.
+those of the page for all files. Model regions only fit maps of the same size as the one they were drawn on.
 
 The same from the command line (stand-alone: `NSSA-batch.exe --spectroscopy ...`):
 

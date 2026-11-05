@@ -415,6 +415,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._spectroscopy.message.connect(lambda title, text: self._notify(title, text))
         self._spectroscopy.maps_to_image.connect(self._install_spectroscopy_maps)
         self._spectroscopy.show_3d.connect(self.show_spectroscopy_3d)
+        self._spectroscopy.advanced_changed.connect(self.set_advanced)
         self._pages = QtWidgets.QTabWidget()
         self._pages.addTab(central, "Image")
         self._pages.addTab(self._spectroscopy, "Spectroscopy")
@@ -502,6 +503,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._add_action(tools_menu, "Combine channels (lateral force)...", self._combine_dialog)
         self._add_action(tools_menu, "Grain analysis...", self.show_grain_tool, "Ctrl+G")
         self._add_action(tools_menu, "Measure lattice...", self.measure_lattice)
+        self._add_action(tools_menu, "Curvature...", self.measure_curvature)
+        self._add_action(tools_menu, "Terrace analysis...", self.analyze_terraces)
         self._add_action(tools_menu, "Color map editor...", lambda: self._view.open_colormap_editor())
 
         help_menu = bar.addMenu("&Help")
@@ -530,6 +533,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for panel in self._operation_panels:
             panel.set_advanced(on)
         self._lateral.setVisible(on)
+        if hasattr(self, "_spectroscopy"):
+            self._spectroscopy.set_advanced(on)
         for index in range(self._analysis.count()):
             if self._analysis.tabText(index) in ("2D Spectrum", "Functions"):
                 self._analysis.setTabVisible(index, on)
@@ -2127,6 +2132,28 @@ class MainWindow(QtWidgets.QMainWindow):
         for panel in self._operation_panels:
             panel.set_context(keys, self._doc.layers[current].current.unit)
         self._on_channel(self._view.channel())
+
+    def measure_curvature(self, show: bool = True):
+        """ Opens the curvature measurement for the shown channel; returns the dialog (not shown with show=False). """
+        if self._doc is None:
+            self._notify("Curvature", "Open an image first.")
+            return None
+        from curvature_dialog import CurvatureDialog
+        dialog = CurvatureDialog(self, self.layer.current, self.key, window=self)
+        if show and not self.api_mode:
+            dialog.exec()
+        return dialog
+
+    def analyze_terraces(self, show: bool = True):
+        """ Opens the terrace analysis for the shown channel; returns the dialog (not shown with show=False). """
+        if self._doc is None:
+            self._notify("Terrace analysis", "Open an image first.")
+            return None
+        from terrace_dialog import TerraceDialog
+        dialog = TerraceDialog(self, self.layer.current, self.key, window=self)
+        if show and not self.api_mode:
+            dialog.exec()
+        return dialog
 
     def measure_lattice(self, show: bool = True):
         """ Opens the lattice measurement for the shown channel; returns the dialog (not shown with show=False). """

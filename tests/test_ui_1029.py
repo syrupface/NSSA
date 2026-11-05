@@ -116,12 +116,13 @@ def test_mouse_navigation(app, tmp_path):
     view.zoom_at(*center, 2.0)                                      # zoom in twice around the center
     nx0, nx1 = view.ax.get_xlim()
     assert (nx1 - nx0) == pytest.approx((x1 - x0) / 2, rel=1e-6)
-    # drag to the right by 50 pixels: the view moves left
-    press = MouseEvent("button_press_event", view.canvas, *center, button=1)
+    # drag to the right by 50 pixels with the right button (the left one draws a zoom box since 1.1): the view
+    # moves left
+    press = MouseEvent("button_press_event", view.canvas, *center, button=3)
     view._nav_press(press)
-    move = MouseEvent("motion_notify_event", view.canvas, center[0] + 50, center[1], button=1)
+    move = MouseEvent("motion_notify_event", view.canvas, center[0] + 50, center[1], button=3)
     view._nav_motion(move)
-    view._nav_release(MouseEvent("button_release_event", view.canvas, center[0] + 50, center[1], button=1))
+    view._nav_release(MouseEvent("button_release_event", view.canvas, center[0] + 50, center[1], button=3))
     px0, px1 = view.ax.get_xlim()
     assert px0 < nx0 and (px1 - px0) == pytest.approx(nx1 - nx0, rel=1e-6)
     view.reset_view()

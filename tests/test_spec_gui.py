@@ -204,9 +204,9 @@ def test_origin_and_display_bar(window):
     assert page._iv_plot.isVisibleTo(page) and not page._x_axis.isVisibleTo(page)
 
 
-def test_fit_regions_with_other_models(window, tmp_path):
+def test_model_regions_with_other_models(window, tmp_path):
     """ 2026-11-03: different models on different parts of a map: the masked curves fitted again with other model
-        settings (a fit region), kept when everything is analyzed again, saved and loaded. """
+        settings (a model region), kept when everything is analyzed again, saved and loaded. """
     page = window._spectroscopy
     page.load(synthetic_map(nx=4, ny=3, adhesion=3e-9, noise=0.005e-9))
     page._model.set_value("hertz")
@@ -224,7 +224,7 @@ def test_fit_regions_with_other_models(window, tmp_path):
     assert all(rows[n]["model"].startswith("DMT") and rows[n][sp.REGION] == 1.0 for n in (1, 2, 3, 4))
     assert all(rows[n]["model"].startswith("Hertz") and rows[n][sp.REGION] == 0.0 for n in range(5, 13))
     assert "adhesion (fit)" in rows[1] and "adhesion (fit)" not in rows[5]
-    assert results.map(sp.REGION).tolist()[0] == [1, 1, 1, 1]        # the map of the fit regions
+    assert results.map(sp.REGION).tolist()[0] == [1, 1, 1, 1]        # the map of the model regions
     assert sp.REGION not in [s[0] for s in results.statistics()]
     page._stats_region.set_value("region:1")
     assert {s[0]: s for s in results.statistics(page.selection())}["E"][2] == 4
@@ -232,7 +232,7 @@ def test_fit_regions_with_other_models(window, tmp_path):
     assert {s[0]: s for s in results.statistics(page.selection())}["E"][2] == 8
     # the curve is shown with the model of its region
     page.set_curve(0)
-    assert page._curve.fit.model == "dmt" and "fit region 1" in page.plot.ax.get_title()
+    assert page._curve.fit.model == "dmt" and "model region 1" in page.plot.ax.get_title()
     page.set_curve(8)
     assert page._curve.fit.model == "hertz"
     page._region_preview.setChecked(False)                           # the panel settings instead
@@ -256,7 +256,7 @@ def test_fit_regions_with_other_models(window, tmp_path):
     path = tmp_path / "r.csv"
     assert page.export_results(path)
     header = path.read_text(encoding="utf-8").splitlines()[0].split(",")
-    assert "model" in header and "fit region" in header
+    assert "model" in header and "model region" in header
     regions_file = tmp_path / "regions.json"
     assert page.save_regions(regions_file)
     page.region_to_mask(1)
@@ -304,7 +304,7 @@ def test_quality_filter_and_picking_on_the_topography(window, tmp_path):
 
 @needs_example
 def test_spectroscopy_report_pdf_and_pptx(window, tmp_path):
-    """ 2026-11-03: the report of the Spectroscopy page: settings, fit regions, curve, maps as shown, statistics,
+    """ 2026-11-03: the report of the Spectroscopy page: settings, model regions, curve, maps as shown, statistics,
         histogram with its fit; PDF and PowerPoint. """
     import report
     import spec_report
@@ -335,7 +335,7 @@ def test_spectroscopy_report_pdf_and_pptx(window, tmp_path):
     deck = tmp_path / "spec.pptx"
     assert page.save_report(deck, every, header)
     slides = report_pptx.slide_texts(deck)                         # the text of every slide
-    for title in ("Analysis settings", "Maps", "Histogram", "Fit regions", "Curve 1"):
+    for title in ("Analysis settings", "Maps", "Histogram", "Model regions", "Curve 1"):
         assert any(text.startswith(title) for text in slides), title
     small = tmp_path / "small.pdf"
     assert page.save_report(small, {"stats"}, header) and small.stat().st_size < pdf.stat().st_size
