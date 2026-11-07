@@ -5,10 +5,11 @@ NSSA, the NSF Surface and Spectroscopy Analyzer (formerly Nanosurf Surface Analy
 saved by Gwyddion (`.gwy`). It is an independent project, not a product of Nanosurf AG; it reads Nanosurf's file formats with NSFopen. Every step is
 a recorded operation: it can be undone, saved as a *macro* and replayed on other files, also automatically.
 
-**Contents**: 1 Quick start (1a Basic and Advanced, live preview, starter workflows) - 2 Window - 3 Conventions - 4 Level - 5 Mask - 6 Filter - 7 Glitch correction -
-8 Rescale (8a Open-loop XY correction from the position sensors, 8b Resample pixels) - 9 Statistics - 10 Line cut -
-11 Spectra - 12 Grains (tool) - 13 Stitching - 13a Combine channels (lateral force) - 13b 3D view - 13c Lattice - 14 Macros and batch - 15 Export (15a Report) -
-16 Files and limits - 17 Spectroscopy (force curves, force maps, I-V curves)
+**Contents**: 1 Quick start (1a Basic and Advanced, live preview, starter workflows) - 2 Window (2a Color map editor) - 3 Conventions - 4 Level -
+5 Mask - 6 Filter - 7 Glitch correction - 8 Rescale (8a Open-loop XY correction from the position sensors, 8b Resample pixels) - 9 Statistics
+(9a Histogram fits) - 10 Line cut - 11 Spectra - 12 Grains (tool) - 13 Stitching - 13a Combine channels (lateral force) - 13b 3D view - 13c Lattice -
+13d Curvature - 13e Terrace analysis - 14 Macros and batch - 15 Export (15a Report) - 16 Files and limits - 17 Spectroscopy (17a Force curves,
+17b I-V curves, 17c Analyze and Export, 17d Report, settings and batch)
 
 ---
 
