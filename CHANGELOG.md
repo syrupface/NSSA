@@ -1,6 +1,6 @@
 # Change log
 
-## 1.1.0 (not yet released)
+## 1.1.0 (November 8, 2026)
 
 Needs NSFopen 2.5.0.
 
