@@ -2,7 +2,8 @@
 ; Installs for the current user (no administrator rights needed); the user can choose all users in the dialog.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  ; only when this script is compiled by hand: build.bat passes appinfo.VERSION. Keep the two the same.
+  #define AppVersion "1.1.0"
 #endif
 #define AppName "NSF Surface and Spectroscopy Analyzer"
 #define AppShort "NSSA"
