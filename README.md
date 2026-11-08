@@ -27,7 +27,7 @@ the same numbers.
 - **Color maps:** built-in maps with previews, and an editor to make your own.
 
 *File - Open example* opens NSFopen's example files, so everything can be tried without your own data. The user manual
-is `app_NSSA/MANUAL.md`, also on the Help page of the program (F1).
+is `app_NSSA/MANUAL.md`, also on the Help page of the program (F1). As a PDF with figures: [docs/NSSA_User_Guide.pdf](docs/NSSA_User_Guide.pdf).
 
 ![The Spectroscopy page](docs/spectroscopy_page.png)
 

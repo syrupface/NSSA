@@ -27,3 +27,4 @@ tokens.json
 NOTES.md
 *.pptx
 *.pdf
+!docs/NSSA_User_Guide.pdf
